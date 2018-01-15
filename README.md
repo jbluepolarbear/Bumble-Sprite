@@ -1,5 +1,5 @@
 # Bumble-Sprite
-Sprite class with hierarchy built on top of Bumble
+Sprite class with hierarchy built on top of [Bumble](https://github.com/jbluepolarbear/Bumble)
 <p align="center">
   <img src="https://raw.githubusercontent.com/jbluepolarbear/Bumble/master/bumble.png"/>
 </p>
