@@ -87,8 +87,8 @@ class BumbleSprite {
         this.__transformation.apply();
         this.__bumble.context.globalAlpha *= this.__opacity;
         if (this.__debugDraw) {    
-            bumble.context.fillStyle = this.__color;
-            bumble.context.fillRect(0, 0, this.__transformation.width, this.__transformation.height);
+            this.__bumble.context.fillStyle = this.__color;
+            this.__bumble.context.fillRect(0, 0, this.__transformation.width, this.__transformation.height);
         }
         for (let child of this.__children) {
             child.draw();
