@@ -82,18 +82,57 @@ class BumbleSprite {
         }
     }
 
-    draw() {
-        this.__transformation.push();
-        this.__transformation.apply();
-        this.__bumble.context.globalAlpha *= this.__opacity;
-        if (this.__debugDraw) {    
+    draw(parentTransform = null, parentAlpha = 1.0) {
+        if (this.__debugDraw) {
+            this.__transformation.apply(parentTransform);
+            this.__bumble.context.globalAlpha = parentAlpha * this.__opacity;
             this.__bumble.context.fillStyle = this.__color;
             this.__bumble.context.fillRect(0, 0, this.__transformation.width, this.__transformation.height);
         }
+        const trans = this.__transformation.getTransform(parentTransform);
+        const alpha = parentAlpha * this.__opacity
         for (let child of this.__children) {
-            child.draw();
+            child.draw(trans, alpha);
         }
-        this.__transformation.pop();
+    }
+
+    getTransform() {
+        let trans = this.__transformation.getTransform();
+        let parent = this.__parent;
+        while (parent !== null) {
+            trans = parent.getTransform().multiply(trans);
+            parent = parent.parent;
+        }
+        return trans;
+    }
+
+    getAABB() {
+        const trans = this.getTransform();
+
+        const points = [];
+        const startPoint = new BumbleVector(0, 0).multiplyMatrix(trans);
+        points.push(new BumbleVector(this.__transformation.width, 0).multiplyMatrix(trans));
+        points.push(new BumbleVector(0, this.__transformation.height).multiplyMatrix(trans));
+        points.push(new BumbleVector(this.__transformation.width, this.__transformation.height).multiplyMatrix(trans));
+
+        const aabb = new BumbleRect(startPoint.x, startPoint.x, startPoint.y, startPoint.y);
+        
+        for (let point of points) {
+            if (point.x < aabb.left) {
+                aabb.left = point.x;
+            }
+            if (point.x > aabb.right) {
+                aabb.right = point.x;
+            }
+            if (point.y < aabb.top) {
+                aabb.top = point.y;
+            }
+            if (point.y > aabb.bottom) {
+                aabb.bottom = point.y;
+            }
+        }
+
+        return aabb;
     }
 }
 
@@ -109,11 +148,9 @@ class BumbleImageSprite extends BumbleSprite {
         this.__image.setSize(this.width, this.height);
     }
 
-    draw() {
-        this.__transformation.push();
-        this.__transformation.apply();
-        this.__image.draw();
-        this.__transformation.pop();
+    draw(parentTransform = null, parentAlpha = 1.0) {
+        this.__bumble.context.globalAlpha = parentAlpha * this.__opacity;
+        this.__image.draw(this.__transformation.getTransform(parentTransform), parentAlpha);
     }
 }
 
@@ -127,12 +164,9 @@ class BumbleParticle extends BumbleSprite {
         this.__alive = false;
     }
 
-    draw() {
-        this.__transformation.push();
-        this.__transformation.apply();
-        this.__bumble.context.globalAlpha *= this.__opacity;
-        this.__image.draw();
-        this.__transformation.pop();
+    draw(parentTransform = null, parentAlpha = 1.0) {
+        this.__bumble.context.globalAlpha = parentAlpha * this.__opacity;
+        this.__image.draw(this.__transformation.getTransform(parentTransform));
     }
 
     get alive() { return this.__alive; }
@@ -152,11 +186,15 @@ class BumbleParticleEmitter extends BumbleSprite {
         this.__currentLife = 0;
         this.__particles = [];
         for (let i = 0; i < particleNumber; ++i) {
-            this.__particles.push(particleCreater());
+            const particle = particleCreater();
+            this.addChild(particle);
+            this.__particles.push(particle);
         }
         this.__currentNumber = 0;
         this.__startTime = 0;
         this.__started = false;
+        this.__transformation.width = 20;
+        this.__transformation.height = 20;
     }
 
     start() {
@@ -191,12 +229,11 @@ class BumbleParticleEmitter extends BumbleSprite {
         this.__emitterFunc(this.__getNextParticle.bind(this));
     }
 
-    draw() {
-        this.__transformation.push();
-        this.__transformation.apply();
+    draw(parentTransform = null, parentAlpha = 1.0) {
+        const trans = this.__transformation.getTransform(parentTransform);
         for (let i = 0; i < this.__currentNumber;) {
             if (this.__particles[i].alive) {
-                this.__particles[i].draw();
+                this.__particles[i].draw(trans, parentAlpha);
                 ++i;
             } else {
                 const temp = this.__particles[this.__currentNumber - 1];
@@ -205,6 +242,33 @@ class BumbleParticleEmitter extends BumbleSprite {
                 this.__currentNumber -= 1;
             }
         }
-        this.__transformation.pop();
+    }
+
+    getAABB() {
+        const rects = [];
+
+        const aabb = super.getAABB();
+
+        if (this.__currentNumber === 0) {
+            return aabb;
+        }
+
+        for (let i = 0; i < this.__currentNumber; ++i) {
+            const particleAABB = this.__particles[i].getAABB();
+            if (particleAABB.left < aabb.left) {
+                aabb.left = particleAABB.left;
+            }
+            if (particleAABB.right > aabb.right) {
+                aabb.right = particleAABB.right;
+            }
+            if (particleAABB.top < aabb.top) {
+                aabb.top = particleAABB.top;
+            }
+            if (particleAABB.bottom > aabb.bottom) {
+                aabb.bottom = particleAABB.bottom;
+            }
+        }
+
+        return aabb;
     }
 }
