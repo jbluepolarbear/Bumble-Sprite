@@ -1,12 +1,21 @@
 class BumbleSprite {
     constructor(bumble, width, height) {
         this.__bumble = bumble;
-        this.__transformation = new BumbleTransformation(this.__bumble, width, height);
+        this.__transformation = new BumbleTransformation(width, height);
         this.__children = [];
         this.__parent = null;
         this.__debugDraw = false;
         this.__color = BumbleColor.fromRGB(255, 255, 255);
         this.__opacity = 1.0;
+        this.__cachedTransformation = null;
+        this.__dirty = true;
+    }
+
+    setDirty() {
+        this.__dirty = true;
+        for (let child of this.__children) {
+            child.setDirty();
+        }
     }
 
     get width() {
@@ -20,6 +29,7 @@ class BumbleSprite {
     setSize(width, height) {
         this.__transformation.width = width;
         this.__transformation.height = height;
+        this.setDirty();
     }
 
     get debugDraw() { return this.__debugDraw; }
@@ -35,36 +45,43 @@ class BumbleSprite {
     get opacity() { return this.__opacity; }
     set opacity(value) {
         this.__opacity = value;
+        this.setDirty();
     }
 
     get transformation() { return this.__transformation; }
     set transformation(value) {
         this.__transformation = value;
+        this.setDirty();
     }
 
     get rotation() { return this.__transformation.rotation; }
     set rotation(value) {
         this.__transformation.rotation = value;
+        this.setDirty();
     }
     
     get position() { return this.__transformation.position; }
     set position(value) {
         this.__transformation.position = value;
+        this.setDirty();
     }
     
     get anchor() { return this.__transformation.anchor; }
     set anchor(value) {
         this.__transformation.anchor = value;
+        this.setDirty();
     }
     
     get scale() { return this.__transformation.scale; }
     set scale(value) {
         this.__transformation.scale = value;
+        this.setDirty();
     }
 
     get parent() { return this.__parent; }
     set parent(value) {
         this.__parent = value;
+        this.setDirty();
     }
 
     addChild(sprite) {
@@ -82,28 +99,32 @@ class BumbleSprite {
         }
     }
 
-    draw(parentTransform = null, parentAlpha = 1.0) {
+    draw(parentAlpha = 1.0) {
         if (this.__debugDraw) {
-            this.__transformation.apply(parentTransform);
+            this.__bumble.applyTransformation(this.getTransform());
             this.__bumble.context.globalAlpha = parentAlpha * this.__opacity;
             this.__bumble.context.fillStyle = this.__color;
             this.__bumble.context.fillRect(0, 0, this.__transformation.width, this.__transformation.height);
         }
-        const trans = this.__transformation.getTransform(parentTransform);
+        const trans = this.getTransform();
         const alpha = parentAlpha * this.__opacity
         for (let child of this.__children) {
-            child.draw(trans, alpha);
+            child.draw(alpha);
         }
     }
 
     getTransform() {
-        let trans = this.__transformation.getTransform();
-        let parent = this.__parent;
-        while (parent !== null) {
-            trans = parent.getTransform().multiply(trans);
-            parent = parent.parent;
+        if (this.__dirty) {
+            let trans = this.__transformation.build();
+            let parent = this.__parent;
+            while (parent !== null) {
+                trans = parent.getTransform().multiply(trans);
+                parent = parent.parent;
+            }
+            this.__cachedTransformation = trans;
+            this.__dirty = false;
         }
-        return trans;
+        return this.__cachedTransformation;
     }
 
     getAABB() {
@@ -138,35 +159,36 @@ class BumbleSprite {
 
 class BumbleImageSprite extends BumbleSprite {
     constructor(bumble, image) {
-        super(bumble, image.width, image.height);
+        super(bumble, image.image.width, image.image.height);
         this.__image = image;
-        this.__image.anchor = new BumbleVector(0, 0);
+        this.__transformation.anchor = new BumbleVector(0.5, 0.5);
     }
 
     setSize(width, height) {
-        super.setSize(width, height);
-        this.__image.setSize(this.width, this.height);
+        this.transformation.scale = new BumbleVector(width / this.width, height / this.height);
     }
 
-    draw(parentTransform = null, parentAlpha = 1.0) {
+    draw(parentAlpha = 1.0) {
         this.__bumble.context.globalAlpha = parentAlpha * this.__opacity;
-        this.__image.draw(this.__transformation.getTransform(parentTransform), parentAlpha);
+        this.__bumble.applyTransformation(this.getTransform());
+        this.__image.draw();
     }
 }
 
-class BumbleParticle extends BumbleSprite {
+class BumbleParticle extends BumbleImageSprite {
     constructor(bumble, width, height, image) {
-        super(bumble, width, height);
+        super(bumble, image);
         this.__bumble = bumble;
         this.__image = image;
         this.__image.anchor = new BumbleVector(0, 0);
-        this.__image.setSize(width, height);
+        super.setSize(width, height);
         this.__alive = false;
     }
 
     draw(parentTransform = null, parentAlpha = 1.0) {
         this.__bumble.context.globalAlpha = parentAlpha * this.__opacity;
-        this.__image.draw(this.__transformation.getTransform(parentTransform));
+        this.__bumble.applyTransformation(this.getTransform());
+        this.__image.draw();
     }
 
     get alive() { return this.__alive; }
@@ -229,11 +251,12 @@ class BumbleParticleEmitter extends BumbleSprite {
         this.__emitterFunc(this.__getNextParticle.bind(this));
     }
 
-    draw(parentTransform = null, parentAlpha = 1.0) {
-        const trans = this.__transformation.getTransform(parentTransform);
+    draw(parentAlpha = 1.0) {
+        const trans = this.getTransform();
+        const opacity = parentAlpha * this.__opacity;
         for (let i = 0; i < this.__currentNumber;) {
             if (this.__particles[i].alive) {
-                this.__particles[i].draw(trans, parentAlpha);
+                this.__particles[i].draw(opacity);
                 ++i;
             } else {
                 const temp = this.__particles[this.__currentNumber - 1];
