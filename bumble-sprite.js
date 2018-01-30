@@ -127,7 +127,7 @@ class BumbleSprite {
         return this.__cachedTransformation;
     }
 
-    getAABB() {
+    get aabb() {
         const trans = this.getTransform();
 
         const points = [];
@@ -154,6 +154,18 @@ class BumbleSprite {
         }
 
         return aabb;
+    }
+
+    get obb() {
+        const trans = this.getTransform();
+
+        const leftTop = new BumbleVector(0, 0).multiplyMatrix(trans);
+        const rightTop = new BumbleVector(this.__transformation.width, 0).multiplyMatrix(trans);
+        const leftBottom = new BumbleVector(0, this.__transformation.height).multiplyMatrix(trans);
+        const rightBottom = new BumbleVector(this.__transformation.width, this.__transformation.height).multiplyMatrix(trans);
+
+        const obb = new BumbleOrientedRect(leftTop, rightTop, rightBottom, leftBottom);
+        return obb;
     }
 }
 
@@ -267,17 +279,17 @@ class BumbleParticleEmitter extends BumbleSprite {
         }
     }
 
-    getAABB() {
+    get aabb() {
         const rects = [];
 
-        const aabb = super.getAABB();
+        const aabb = super.aabb;
 
         if (this.__currentNumber === 0) {
             return aabb;
         }
 
         for (let i = 0; i < this.__currentNumber; ++i) {
-            const particleAABB = this.__particles[i].getAABB();
+            const particleAABB = this.__particles[i].aabb;
             if (particleAABB.left < aabb.left) {
                 aabb.left = particleAABB.left;
             }
